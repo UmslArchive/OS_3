@@ -41,23 +41,26 @@ int main(int argc, char* argv[]) {
     printf("Parent before fork: %d\n", getpid());
 
     //Spawn a fan of maxChildren # of processes
-    pid_t cpid = 0;
+    pid_t pid = 0;
     for(i = 1; i < maxChildren; i++) {
-        cpid = fork();
+        pid = fork();
 
         //Fork error.
-        if(cpid < 0) {
+        if(pid < 0) {
             perror("ERROR:oss:Failed to fork");
             exit(1);
         }
 
-        //process child.
-        if(cpid == 0) {
+        //Process child only.
+        if(pid == 0) {
+            sleep(1);
             printf("Child:%d, says hello to parent:%d\n", getpid(), getppid());
             exit(0);
         }
-        else {
-            fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, cpid);
+        
+        //Process parent only.
+        if(pid > 0) {
+            fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
         }
     }
         
