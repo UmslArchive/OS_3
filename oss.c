@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 //Globals
 enum FLAGS {
@@ -25,13 +27,44 @@ int main(int argc, char* argv[]) {
     int maxChildren = 5;
     char* logFileName = "log.txt";
     int terminateTime = 5;
+    int i;
+    int status;
 
     handleArgs(argc, argv, &maxChildren, &logFileName, &terminateTime);
 
     if(DEBUG) {
         printf("maxChildren = %d\n", maxChildren);
         printf("logFileName = %s\n", logFileName);
-        printf("terminateTime = %d\n", terminateTime);
+        printf("terminateTime = %d\n\n", terminateTime);
+    }
+
+    printf("Parent before fork: %d\n", getpid());
+
+    //Spawn a fan of maxChildren # of processes
+    pid_t cpid = 0;
+    for(i = 1; i < maxChildren; i++) {
+        cpid = fork();
+
+        //Fork error.
+        if(cpid < 0) {
+            perror("ERROR:oss:Failed to fork");
+            exit(1);
+        }
+
+        //process child.
+        if(cpid == 0) {
+            printf("Child:%d, says hello to parent:%d\n", getpid(), getppid());
+            exit(0);
+        }
+        else {
+            fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, cpid);
+        }
+    }
+        
+    for(i = 1; i < maxChildren; i++) {
+        sleep(2);
+        wait(&status);
+        printf("%d: exit status: %d\n", i, WEXITSTATUS(status));
     }
 
     return 0;
