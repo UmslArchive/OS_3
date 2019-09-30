@@ -22,9 +22,9 @@ void printIntArray(int* arr, int size);
 
 int main(int argc, char* argv[]) {
     //Program variables
-    int maxChildren = -1;
-    char* logFileName = NULL;
-    int terminateTime = -1;
+    int maxChildren = 5;
+    char* logFileName = "log.txt";
+    int terminateTime = 5;
 
     handleArgs(argc, argv, &maxChildren, &logFileName, &terminateTime);
 
