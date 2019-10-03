@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <sys/shm.h>
 #include <sys/ipc.h>
+#include <errno.h>
 
 #include "sharedMemoryKeys.h"
 
@@ -45,7 +46,11 @@ int main(int argc, char* argv[]) {
     key_t key = MSG_KEY;
     int shmflg;
     int shmid;
-    int size;
+    size_t size;
+    char* shmPtr;
+    int* shmIntPtr;
+    struct shmid_ds shmid_ds;
+    int rtrn;
 
     //-----
 
@@ -53,40 +58,87 @@ int main(int argc, char* argv[]) {
     handleArgs(argc, argv, &maxChildren, &logFileName, &terminateTime);
 
     if(DEBUG) {
-        printf("maxChildren = %d\n", maxChildren);
-        printf("logFileName = %s\n", logFileName);
-        printf("terminateTime = %d\n\n", terminateTime);
+        fprintf(stderr, "maxChildren = %d\n", maxChildren);
+        fprintf(stderr, "logFileName = %s\n", logFileName);
+        fprintf(stderr, "terminateTime = %d\n\n", terminateTime);
+        fprintf(stderr, "Parent before fork: %d\n", getpid());
     }
 
-    printf("Parent before fork: %d\n", getpid());
+    /* 
+    Setup shared memory as such: 
+        - first sizeof(int) # of bytes stores seconds
+        - next sizeof(int) # of bytes stores nanoseconds
+        - remaining maxChildren # of bytes stores one-byte for each child
+          process' shmMsg which effectively functions as a bool
+    */
+    
+    //Set number of bytes of shared memory to be allocated
+    size = sizeof(int) + sizeof(int) + sizeof(int) * maxChildren;
+
+    //Create segment
+    int ossShmFlags = IPC_CREAT | 0777;
+    shmid = shmget(key, size, ossShmFlags);
+    if(shmid < 0) {
+        perror("ERROR:oss:shmget failed");
+        fprintf(stderr, "key:%d, size:%ld, flags:%d\n", key, size, ossShmFlags);
+        exit(1);
+    }
+
+    //Attach segment
+    shmPtr = (char*)shmat(shmid, NULL, 0);
+    shmIntPtr = (int*)shmPtr;
+
+    for(i = 0; i < size / sizeof(int); ++i) {
+        *shmIntPtr++ = i - 2;
+    }
+    
+    shmIntPtr = (int*) shmPtr;
+    for(i = 0; i < size / sizeof(int); ++i) {
+        fprintf(stderr, "%d ", *shmIntPtr);
+        *shmIntPtr++;
+    }
+
+    //Remove shared memory segment upon total detachment.
+    int cmd = IPC_RMID;
+    rtrn = shmctl(shmid, cmd, &shmid_ds);
+    if(rtrn == -1) {
+        perror("ERROR:oss:shmctl failed");
+        exit(1);
+    }
+
+    //---------
 
     //Spawn a fan of maxChildren # of processes
     for(i = 1; i < maxChildren; i++) {
         pid = fork();
 
-        //Fork error.
+        //Fork error
         if(pid < 0) {
-            perror("ERROR:oss:Failed to fork");
+            perror("ERROR:oss:failed to fork");
             exit(1);
         }
 
-        //Process child only
-        if(pid == 0) {
-            sleep(1);
-            printf("Child:%d, says hello to parent:%d\n", getpid(), getppid());
-            exit(0);
-        }
+        //Child breaks from loop
+        if(pid == 0)
+            break;
         
         //Process parent only
         if(pid > 0) {
-            fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
+            if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
         }
     }
-        
+
+    //Process child
+    if(pid == 0) {
+        sleep(1);
+        if(DEBUG) fprintf(stderr, "Child:%d, says hello to parent:%d\n", getpid(), getppid());
+        exit(0);
+    }
+    
+    //Wait for each child to exit
     for(i = 1; i < maxChildren; i++) {
-        sleep(2);
         wait(&status);
-        printf("%d: exit status: %d\n", i, WEXITSTATUS(status));
+        if(DEBUG) fprintf(stderr, "%d: exit status: %d\n", i, WEXITSTATUS(status));
     }
 
     return 0;
