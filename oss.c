@@ -26,6 +26,7 @@ const int DEBUG = 1;
 //Function Prototypes
 void handleArgs(int argc, char* argv[], int* maxChild, char** logFile, int* termTime);
 void printIntArray(int* arr, int size);
+void processChild(size_t size);
 
 //--------------------------------------------------------
 
@@ -47,8 +48,8 @@ int main(int argc, char* argv[]) {
     int shmflg;
     int shmid;
     size_t size;
-    char* shmPtr;
-    int* shmIntPtr;
+    char* shmPtr = NULL;
+    int* shmIntPtr = NULL;
     struct shmid_ds shmid_ds;
     int rtrn;
 
@@ -64,48 +65,8 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Parent before fork: %d\n", getpid());
     }
 
-    /* 
-    Setup shared memory as such: 
-        - first sizeof(int) # of bytes stores seconds
-        - next sizeof(int) # of bytes stores nanoseconds
-        - remaining maxChildren # of bytes stores one-byte for each child
-          process' shmMsg which effectively functions as a bool
-    */
-    
     //Set number of bytes of shared memory to be allocated
     size = sizeof(int) + sizeof(int) + sizeof(int) * maxChildren;
-
-    //Create segment
-    int ossShmFlags = IPC_CREAT | 0777;
-    shmid = shmget(key, size, ossShmFlags);
-    if(shmid < 0) {
-        perror("ERROR:oss:shmget failed");
-        fprintf(stderr, "key:%d, size:%ld, flags:%d\n", key, size, ossShmFlags);
-        exit(1);
-    }
-
-    //Attach segment
-    shmPtr = (char*)shmat(shmid, NULL, 0);
-    shmIntPtr = (int*)shmPtr;
-
-    for(i = 0; i < size / sizeof(int); ++i) {
-        *shmIntPtr++ = i - 2;
-    }
-    
-    shmIntPtr = (int*) shmPtr;
-    for(i = 0; i < size / sizeof(int); ++i) {
-        fprintf(stderr, "%d ", *shmIntPtr);
-        *shmIntPtr++;
-    }
-
-    //Remove shared memory segment upon total detachment.
-    int cmd = IPC_RMID;
-    rtrn = shmctl(shmid, cmd, &shmid_ds);
-    if(rtrn == -1) {
-        perror("ERROR:oss:shmctl failed");
-        exit(1);
-    }
-
     //---------
 
     //Spawn a fan of maxChildren # of processes
@@ -128,17 +89,59 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if(pid > 0) {
+        /* 
+        Setup shared memory as such: 
+            - first sizeof(int) # of bytes stores seconds
+            - next sizeof(int) # of bytes stores nanoseconds
+            - remaining maxChildren # of bytes stores one-byte for each child
+            process' shmMsg which effectively functions as a bool
+        */
+
+        //Create segment
+        int ossShmFlags = IPC_CREAT | IPC_EXCL | 0777;
+        shmid = shmget(key, size, ossShmFlags);
+        if(shmid < 0) {
+            perror("ERROR:oss:shmget failed");
+            fprintf(stderr, "key:%d, size:%ld, flags:%d\n", key, size, ossShmFlags);
+            exit(1);
+        }
+
+        //Attach segment
+        shmPtr = (char*)shmat(shmid, NULL, 0);
+        shmIntPtr = (int*)shmPtr;
+
+        //Test write to shared memory.
+        for(i = 0; i < size / sizeof(int); ++i) {
+            *shmIntPtr++ = i - 2;
+        }
+    }
+
+    sleep(2);
+
     //Process child
     if(pid == 0) {
         sleep(1);
         if(DEBUG) fprintf(stderr, "Child:%d, says hello to parent:%d\n", getpid(), getppid());
+        processChild(size);
         exit(0);
     }
     
     //Wait for each child to exit
     for(i = 1; i < maxChildren; i++) {
+        sleep(1);
         wait(&status);
         if(DEBUG) fprintf(stderr, "%d: exit status: %d\n", i, WEXITSTATUS(status));
+    }
+
+    //Remove shared memory segment upon total detachment.
+    if(pid > 0) {
+        int cmd = IPC_RMID;
+        rtrn = shmctl(shmid, cmd, &shmid_ds);
+        if(rtrn == -1) {
+            perror("ERROR:oss:shmctl failed");
+            exit(1);
+        }
     }
 
     return 0;
@@ -194,4 +197,37 @@ void printIntArray(int* arr, int size) {
         printf("%d ", arr[i]);
     }
     printf("\n");
+}
+
+void processChild(size_t size) {
+    //Shared memory vars
+    key_t ckey = MSG_KEY;
+    int cshmid;
+    char* cshmPtr = NULL;
+    int* cshmIntPtr = NULL;
+
+    sleep(3);
+    //Fetch the segment id
+    cshmid = shmget(ckey, size, 0777);
+    if(cshmid < 0) {
+        perror("ERROR:usrPs:shmget failed");
+        fprintf(stderr, "size = %ld\n", size);
+        exit(1);
+    }
+
+    //Attach to segment
+    cshmPtr = (char*)shmat(cshmid, 0, 0);
+    if(cshmPtr == (char*) -1) {
+        perror("ERROR:usrPs:shmat failed");
+        exit(1);
+    }
+    cshmIntPtr = (int*)cshmPtr;
+
+    //Read the shared memory
+    fprintf(stderr, "Child %d reads: ", getpid());
+    int i;
+    for(i = 0; i < size / sizeof(int); ++i) {
+        fprintf(stderr, "%d ", *cshmIntPtr++);
+    }
+    fprintf(stderr, "\n");
 }
