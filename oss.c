@@ -4,6 +4,10 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/shm.h>
+#include <sys/ipc.h>
+
+#include "sharedMemoryKeys.h"
 
 //Globals
 enum FLAGS {
@@ -23,12 +27,22 @@ void printIntArray(int* arr, int size);
 //--------
 
 int main(int argc, char* argv[]) {
-    //Program variables
+    //Iterator
+    int i;
+    
+    //Command line argument values
     int maxChildren = 5;
     char* logFileName = "log.txt";
     int terminateTime = 5;
-    int i;
+
+    //Process control variables
     int status;
+
+    //Shared memory variables
+    key_t key = MSG_KEY;
+    int shmflg;
+    int shmid;
+    int size;
 
     handleArgs(argc, argv, &maxChildren, &logFileName, &terminateTime);
 
@@ -51,14 +65,14 @@ int main(int argc, char* argv[]) {
             exit(1);
         }
 
-        //Process child only.
+        //Process child only
         if(pid == 0) {
             sleep(1);
             printf("Child:%d, says hello to parent:%d\n", getpid(), getppid());
             exit(0);
         }
         
-        //Process parent only.
+        //Process parent only
         if(pid > 0) {
             fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
         }
@@ -81,7 +95,7 @@ void handleArgs(int argc, char* argv[], int* maxChild, char** logFile, int* term
     int i;
     int flagArray[TOTAL_FLAGS];
 
-    //Initialize the flag array to 0.
+    //Initialize the flag array to 0
     for(i = 0; i < TOTAL_FLAGS; i++)
         flagArray[i] = 0;
         
@@ -90,7 +104,7 @@ void handleArgs(int argc, char* argv[], int* maxChild, char** logFile, int* term
         printIntArray(flagArray, TOTAL_FLAGS);
     }
 
-    //Parse each argument from the command line.
+    //Parse each argument from the command line
     int arg = -1;
     while((arg = getopt(argc, argv, "hs:l:t:")) != -1) {
         switch(arg) {
@@ -115,8 +129,6 @@ void handleArgs(int argc, char* argv[], int* maxChild, char** logFile, int* term
                 break;
         }
     }
-
-
 }
 
 void printIntArray(int* arr, int size) {

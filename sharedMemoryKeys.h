@@ -1,0 +1,6 @@
+#ifndef SHARED_MEMORY_KEYS_H
+#define SHARED_MEMORY_KEYS_H
+
+#define MSG_KEY 1337
+
+#endif
