@@ -9,7 +9,7 @@
 
 #include "sharedMemoryKeys.h"
 
-//Globals
+//============= Globals ================================
 enum FLAGS {
     HELP_FLAG,
     SPAWN_FLAG,
@@ -20,11 +20,13 @@ enum FLAGS {
 
 const int DEBUG = 1;
 
+//======================================================
+
 //Function Prototypes
 void handleArgs(int argc, char* argv[], int* maxChild, char** logFile, int* termTime);
 void printIntArray(int* arr, int size);
 
-//--------
+//--------------------------------------------------------
 
 int main(int argc, char* argv[]) {
     //Iterator
@@ -35,8 +37,9 @@ int main(int argc, char* argv[]) {
     char* logFileName = "log.txt";
     int terminateTime = 5;
 
-    //Process control variables
+    //Process(noun) variables
     int status;
+    pid_t pid = 0;
 
     //Shared memory variables
     key_t key = MSG_KEY;
@@ -44,6 +47,9 @@ int main(int argc, char* argv[]) {
     int shmid;
     int size;
 
+    //-----
+
+    //Getopts stuff.
     handleArgs(argc, argv, &maxChildren, &logFileName, &terminateTime);
 
     if(DEBUG) {
@@ -55,7 +61,6 @@ int main(int argc, char* argv[]) {
     printf("Parent before fork: %d\n", getpid());
 
     //Spawn a fan of maxChildren # of processes
-    pid_t pid = 0;
     for(i = 1; i < maxChildren; i++) {
         pid = fork();
 
@@ -87,7 +92,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-//--------
+//----------------------------------------------------------------------
 
 //Function definitions.
 
