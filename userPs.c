@@ -34,9 +34,7 @@ int main(int argc, char* argv[]) {
 
     sleep(1);
 
-    exit(10);
-
-    /* //Fetch the segment id
+    //Fetch the segment id
     cshmid = shmget(ckey, size, 0777);
     if(cshmid < 0) {
         perror("ERROR:usrPs:shmget failed");
@@ -58,7 +56,7 @@ int main(int argc, char* argv[]) {
     for(i = 0; i < size / sizeof(int); ++i) {
         fprintf(stderr, "%d ", *cshmIntPtr++);
     }
-    fprintf(stderr, "\n"); */
+    fprintf(stderr, "\n");
 
     return 50;
 }
