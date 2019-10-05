@@ -7,6 +7,7 @@
 #include <sys/shm.h>
 #include <sys/ipc.h>
 #include <errno.h>
+#include <semaphore.h>
 
 #include "sharedMemoryKeys.h"
 
@@ -67,6 +68,9 @@ int main(int argc, char* argv[]) {
 
     //Set number of bytes of shared memory to be allocated
     size = sizeof(int) + sizeof(int) + sizeof(int) * maxChildren;
+    char sizeString[30];
+    sprintf(sizeString, "%d", (int)size); //store size as a string to be passed.
+
     //---------
 
     //Spawn a fan of maxChildren # of processes
@@ -79,9 +83,13 @@ int main(int argc, char* argv[]) {
             exit(1);
         }
 
-        //Child breaks from loop
-        if(pid == 0)
-            break;
+        //Child execs from the loop, so no further execution occurs from this file
+        //for the child.
+        if(pid == 0) {
+            execl("./usrPs", "usrPs", sizeString, (char*) NULL);
+            exit(55);
+        }
+            
         
         //Process parent only
         if(pid > 0) {
@@ -95,7 +103,7 @@ int main(int argc, char* argv[]) {
             - first sizeof(int) # of bytes stores seconds
             - next sizeof(int) # of bytes stores nanoseconds
             - remaining maxChildren # of bytes stores one-byte for each child
-            process' shmMsg which effectively functions as a bool
+            process' shmMsg which is nothing more than a flag.
         */
 
         //Create segment
@@ -116,20 +124,9 @@ int main(int argc, char* argv[]) {
             *shmIntPtr++ = i - 2;
         }
     }
-
-    sleep(2);
-
-    //Process child
-    if(pid == 0) {
-        sleep(1);
-        if(DEBUG) fprintf(stderr, "Child:%d, says hello to parent:%d\n", getpid(), getppid());
-        processChild(size);
-        exit(0);
-    }
     
     //Wait for each child to exit
     for(i = 1; i < maxChildren; i++) {
-        sleep(1);
         wait(&status);
         if(DEBUG) fprintf(stderr, "%d: exit status: %d\n", i, WEXITSTATUS(status));
     }
@@ -197,37 +194,4 @@ void printIntArray(int* arr, int size) {
         printf("%d ", arr[i]);
     }
     printf("\n");
-}
-
-void processChild(size_t size) {
-    //Shared memory vars
-    key_t ckey = MSG_KEY;
-    int cshmid;
-    char* cshmPtr = NULL;
-    int* cshmIntPtr = NULL;
-
-    sleep(3);
-    //Fetch the segment id
-    cshmid = shmget(ckey, size, 0777);
-    if(cshmid < 0) {
-        perror("ERROR:usrPs:shmget failed");
-        fprintf(stderr, "size = %ld\n", size);
-        exit(1);
-    }
-
-    //Attach to segment
-    cshmPtr = (char*)shmat(cshmid, 0, 0);
-    if(cshmPtr == (char*) -1) {
-        perror("ERROR:usrPs:shmat failed");
-        exit(1);
-    }
-    cshmIntPtr = (int*)cshmPtr;
-
-    //Read the shared memory
-    fprintf(stderr, "Child %d reads: ", getpid());
-    int i;
-    for(i = 0; i < size / sizeof(int); ++i) {
-        fprintf(stderr, "%d ", *cshmIntPtr++);
-    }
-    fprintf(stderr, "\n");
 }
