@@ -14,7 +14,7 @@ const int DEBUG = 1;
 
 //--------------Function prototypes-----------------------
 
-sem_t* getSemaphore();
+sem_t* getSemaphore(key_t* key, size_t* size, int* shmid);
 int* getShmMsg(key_t* key, size_t* size, int* shmid);
 int* getShmLogicalClock();
 
@@ -63,15 +63,20 @@ int main(int argc, char* argv[]) {
 
     sleep(1);
 
+    //Point the pointer to the semaphore.
+    semPtr = getSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
+
     //Point the pointer to the shared memory.
     shmMsgPtr = getShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
 
+    sem_wait(semPtr);
     //Test print.
     fprintf(stderr, "MSGArray: ");
     for(i = 0; i < shmMsgSize; ++i) {
         fprintf(stderr, "%d ", *shmMsgPtr++);
     }
     fprintf(stderr, "\n");
+    sem_post(semPtr);
 
     return 50;
 }
@@ -88,6 +93,24 @@ int* getShmMsg(key_t* key, size_t* size, int* shmid) {
     int* temp = (int*)shmat(*shmid, 0, 0);
     if(temp == (int*) -1) {
         perror("ERROR:usrPs:shmat failed");
+        exit(1);
+    }
+
+    return temp;
+}
+
+sem_t* getSemaphore(key_t* key, size_t* size, int* shmid) {
+    //Fetch the shmid.
+    *shmid = shmget(*key, *size, 0777);
+    if(*shmid < 0) {
+        perror("ERROR:usrPs:shmget failed(semaphore)");
+        exit(1);
+    }
+
+    //Attach to segment
+    sem_t* temp = (sem_t*)shmat(*shmid, 0, 0);
+    if(temp == (sem_t*) -1) {
+        perror("ERROR:usrPs:shmat failed(semaphore)");
         exit(1);
     }
 

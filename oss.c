@@ -66,7 +66,6 @@ int main(int argc, char* argv[]) {
     struct shmid_ds shmSemCtl;
     struct shmid_ds shmMsgCtl;
     struct shmid_ds shmClockCtl;
-    int rtrn;
 
     //Shared memory pointers
     sem_t* semPtr = NULL;
@@ -86,12 +85,12 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "sem_t size: %ld\n", sizeof(sem_t));
     }
 
+    //---------
+
     //Set shmMsgSize to number of children processes to be maintained.
     shmMsgSize = sizeof(int) * maxChildren;
     char shmMsgSizeStr[30];
     sprintf(shmMsgSizeStr, "%d", (int)shmMsgSize);
-
-    //---------
 
     //Create process shared semaphore in shared memory.
     semPtr = createShmSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
@@ -122,8 +121,6 @@ int main(int argc, char* argv[]) {
         }
     }
    
-    
-    
     //Wait for each child to exit
     for(i = 1; i < maxChildren; i++) {
         wait(&status);
