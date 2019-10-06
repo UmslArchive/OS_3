@@ -10,53 +10,76 @@
 
 #include "sharedMemoryKeys.h"
 
-int DEBUG = 1;
+const int DEBUG = 1;
+
+//--------------Function prototypes-----------------------
+
+sem_t* getSemaphore();
+int* getShmMsg(key_t* key, size_t* size, int* shmid);
+int* getShmLogicalClock();
+
+//--------------------------------------------------------
+
 
 int main(int argc, char* argv[]) {
 
-    fprintf(stderr, "arg1 %s", argv[1]);
+    //Shared memory keys
+    key_t shmSemKey = SEM_KEY;
+    key_t shmMsgKey = MSG_KEY;
+    key_t shmClockKey = CLOCK_KEY;
 
-    //Shared memory vars
-    key_t ckey = MSG_KEY;
-    size_t size = 0;
-    int cshmid;
-    char* cshmPtr = NULL;
-    int* cshmIntPtr = NULL;
+    //Shared memory IDs
+    int shmSemID = 0;
+    int shmMsgID = 0;
+    int shmClockID = 0;
 
-    if(argc == 2) {
-        size = (unsigned long) atoi(argv[1]);
-    }
+    //Shared memory sizes
+    size_t shmSemSize = sizeof(sem_t);
+    size_t shmMsgSize = 0;
+    size_t shmClockSize = 2 * sizeof(int);
 
+    //Shared memory control structs.
+    struct shmid_ds shmSemCtl;
+    struct shmid_ds shmMsgCtl;
+    struct shmid_ds shmClockCtl;
+    int rtrn;
+
+    //Shared memory pointers
+    sem_t* semPtr = NULL;
+    int* shmMsgPtr = NULL;
+    int* shmClockPtr = NULL;
+
+    //--------------------------------
+    
+    //Set size of shmMsg array.
+    shmMsgSize = (unsigned long) atoi(argv[1]);
     if(DEBUG) {
         fprintf(stderr, "Child:%d, says hello to parent:%d\n", getpid(), getppid());
-        fprintf(stderr, "Passed Size: %ld\n", size);
+        fprintf(stderr, "shmMsgSize: %ld\n", shmMsgSize);
     }
 
     sleep(1);
 
-    //Fetch the segment id
-    cshmid = shmget(ckey, size, 0777);
-    if(cshmid < 0) {
+    //Point the pointer to the shared memory.
+    shmMsgPtr = getShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
+
+    return 50;
+}
+
+int* getShmMsg(key_t* key, size_t* size, int* shmid) {
+    //Fetch the shmid.
+    *shmid = shmget(*key, *size, 0777);
+    if(*shmid < 0) {
         perror("ERROR:usrPs:shmget failed");
-        fprintf(stderr, "size = %ld\n", size);
         exit(1);
     }
 
     //Attach to segment
-    cshmPtr = (char*)shmat(cshmid, 0, 0);
-    if(cshmPtr == (char*) -1) {
+    int* temp = (int*)shmat(*shmid, 0, 0);
+    if(temp == (int*) -1) {
         perror("ERROR:usrPs:shmat failed");
         exit(1);
     }
-    cshmIntPtr = (int*)cshmPtr;
 
-    //Read the shared memory
-    fprintf(stderr, "Child %d reads: ", getpid());
-    int i;
-    for(i = 0; i < size / sizeof(int); ++i) {
-        fprintf(stderr, "%d ", *cshmIntPtr++);
-    }
-    fprintf(stderr, "\n");
-
-    return 50;
+    return temp;
 }
