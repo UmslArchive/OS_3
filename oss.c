@@ -27,9 +27,10 @@ const int DEBUG = 1;
 //Function Prototypes
 void handleArgs(int argc, char* argv[], int* maxChild, char** logFile, int* termTime);
 void printIntArray(int* arr, int size);
-sem_t* createShmSemaphore();
+sem_t* createShmSemaphore(key_t* key, size_t* size, int* shmid);
 int* createShmMsg(key_t* key, size_t* size, int* shmid);
-int* createShmLogicalClock();
+int* createShmLogicalClock(key_t* key, size_t* size, int* shmid);
+void cleanupSharedMemory(int* shmid, struct shmid_ds* ctl);
 
 //--------------------------------------------------------
 
@@ -92,6 +93,12 @@ int main(int argc, char* argv[]) {
 
     //---------
 
+    //Create process shared semaphore in shared memory.
+    semPtr = createShmSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
+
+    //Create shared memory MSG
+    shmMsgPtr = createShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
+
     //Spawn a fan of maxChildren # of processes
     for(i = 1; i < maxChildren; i++) {
         pid = fork();
@@ -102,25 +109,20 @@ int main(int argc, char* argv[]) {
             exit(1);
         }
 
-        //Child execs from the loop, so no further execution occurs from this file
-        //for the child.
+        //Child execs from the loop, so no further execution occurs from this
+        //file for the child.
         if(pid == 0) {
             execl("./usrPs", "usrPs", shmMsgSizeStr, (char*) NULL);
             exit(55);
-        }
-            
+        } 
         
         //Process parent only
         if(pid > 0) {
             if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
         }
     }
-
-    if(pid > 0) {        
-        //Attach segment
-        shmMsgPtr = createShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
-        sleep(10);
-    }
+   
+    
     
     //Wait for each child to exit
     for(i = 1; i < maxChildren; i++) {
@@ -130,12 +132,8 @@ int main(int argc, char* argv[]) {
 
     //Remove shared memory segment upon total detachment.
     if(pid > 0) {
-        int cmd = IPC_RMID;
-        rtrn = shmctl(shmMsgID, cmd, &shmMsgCtl);
-        if(rtrn == -1) {
-            perror("ERROR:oss:shmctl failed");
-            exit(1);
-        }
+        cleanupSharedMemory(&shmMsgID, &shmMsgCtl);
+        cleanupSharedMemory(&shmSemID, &shmSemCtl);
     }
 
     return 0;
@@ -193,8 +191,31 @@ void printIntArray(int* arr, int size) {
     printf("\n");
 }
 
-sem_t* createSemaphore() {
+sem_t* createShmSemaphore(key_t* key, size_t* size, int* shmid) {
+    int ossShmFlags = IPC_CREAT | IPC_EXCL | 0777;
 
+    //Allocate shared memory and get id
+    *shmid = shmget(*key, *size, ossShmFlags);
+    if(*shmid < 0) {
+        perror("ERROR:oss:shmget failed(semaphore)");
+        fprintf(stderr, "key:%d, size:%ld, flags:%d\n", *key, *size, ossShmFlags);
+        exit(1);
+    }
+
+    //Set the pointer
+    sem_t* temp = (sem_t*)shmat(*shmid, NULL, 0);
+    if(temp == (sem_t*) -1) {
+        perror("ERROR:oss:shmat failed(semaphore)");
+        exit(1);
+    }
+
+    //Initialize semaphore
+    if(sem_init(temp, 1, 1) == -1) {
+        perror("ERROR:oss:sem_init failed");
+        exit(1);
+    }
+
+    return temp;
 }
 
 int* createShmMsg(key_t* key, size_t* size, int* shmid) {
@@ -203,20 +224,29 @@ int* createShmMsg(key_t* key, size_t* size, int* shmid) {
     //Allocate shared memory and get id.
     *shmid = shmget(*key, *size, ossShmFlags);
     if(*shmid < 0) {
-        perror("ERROR:oss:shmget failed");
+        perror("ERROR:oss:shmget failed(msg)");
         fprintf(stderr, "key:%d, size:%ld, flags:%d\n", *key, *size, ossShmFlags);
         exit(1);
     }
 
     int* temp = (int*)shmat(*shmid, NULL, 0);
     if(temp == (int*) -1) {
-        perror("ERROR:oss:shmat failed");
+        perror("ERROR:oss:shmat failed(msg)");
         exit(1);
     }
 
     return temp;
 }
 
-int* createShmLogicalClock() {
+int* createShmLogicalClock(key_t* key, size_t* size, int* shmid) {
 
+}
+
+void cleanupSharedMemory(int* shmid, struct shmid_ds* ctl) {
+    int cmd = IPC_RMID;
+    int rtrn = shmctl(*shmid, cmd, ctl);
+        if(rtrn == -1) {
+            perror("ERROR:oss:shmctl failed");
+            exit(1);
+        }
 }

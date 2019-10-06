@@ -5,10 +5,10 @@ CFLAGS = -I. -g
 all: oss usrPs
 
 oss: oss.o
-	$(CC) $(CFLAGS) -o $@ oss.o
+	$(CC) $(CFLAGS) -o $@ oss.o -lpthread
 
 usrPs: userPs.o
-	$(CC) $(CFLAGS) -o $@ userPs.o
+	$(CC) $(CFLAGS) -o $@ userPs.o -lpthread
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

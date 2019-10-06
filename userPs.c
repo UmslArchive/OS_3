@@ -22,6 +22,8 @@ int* getShmLogicalClock();
 
 
 int main(int argc, char* argv[]) {
+    //Iterator
+    int i;
 
     //Shared memory keys
     key_t shmSemKey = SEM_KEY;
@@ -53,6 +55,7 @@ int main(int argc, char* argv[]) {
     
     //Set size of shmMsg array.
     shmMsgSize = (unsigned long) atoi(argv[1]);
+
     if(DEBUG) {
         fprintf(stderr, "Child:%d, says hello to parent:%d\n", getpid(), getppid());
         fprintf(stderr, "shmMsgSize: %ld\n", shmMsgSize);
@@ -62,6 +65,13 @@ int main(int argc, char* argv[]) {
 
     //Point the pointer to the shared memory.
     shmMsgPtr = getShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
+
+    //Test print.
+    fprintf(stderr, "MSGArray: ");
+    for(i = 0; i < shmMsgSize; ++i) {
+        fprintf(stderr, "%d ", *shmMsgPtr++);
+    }
+    fprintf(stderr, "\n");
 
     return 50;
 }
