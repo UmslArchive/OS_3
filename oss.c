@@ -20,7 +20,7 @@ enum FLAGS {
     TOTAL_FLAGS
 };
 
-const int DEBUG = 0;
+const int DEBUG = 1;
 
 //======================================================
 
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
 
     //Shared memory sizes
     size_t shmSemSize = sizeof(sem_t);
-    size_t shmMsgSize = 0;
+    size_t shmMsgSize = 2 * sizeof(int);
     size_t shmClockSize = 2 * sizeof(int);
 
     //Shared memory control structs.
@@ -87,11 +87,6 @@ int main(int argc, char* argv[]) {
 
     //---------
 
-    //Set shmMsgSize to number of children processes to be maintained.
-    shmMsgSize = sizeof(int) * maxChildren;
-    char shmMsgSizeStr[30];
-    sprintf(shmMsgSizeStr, "%d", (int)shmMsgSize);
-
     //Setup shared memory w/ semaphore
     semPtr = createShmSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
     shmMsgPtr = createShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
@@ -110,7 +105,7 @@ int main(int argc, char* argv[]) {
         //Child execs from the loop, so no further execution occurs from this
         //file for the child.
         if(pid == 0) {
-            execl("./usrPs", "usrPs", shmMsgSizeStr, (char*) NULL);
+            execl("./usrPs", "usrPs", (char*) NULL);
             exit(55);
         } 
         
@@ -119,11 +114,16 @@ int main(int argc, char* argv[]) {
             if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
         }
     }
+
+
    
     //Wait for each child to exit
+    int exitedPID;
     for(i = 1; i < maxChildren; i++) {
-        wait(&status);
-        if(DEBUG) fprintf(stderr, "%d: exit status: %d\n", i, WEXITSTATUS(status));
+        exitedPID = wait(&status);
+        sem_wait(semPtr);
+        if(DEBUG) fprintf(stderr, "Child %d -- exit status: %d\n", exitedPID, WEXITSTATUS(status));
+        sem_post(semPtr);
     }
 
     //Remove shared memory segments upon total detachment.
@@ -189,7 +189,7 @@ void printIntArray(int* arr, int size) {
 }
 
 sem_t* createShmSemaphore(key_t* key, size_t* size, int* shmid) {
-    int ossShmFlags = IPC_CREAT | IPC_EXCL | 0777;
+    int ossShmFlags = IPC_CREAT /* | IPC_EXCL  */| 0777;
 
     //Allocate shared memory and get id
     *shmid = shmget(*key, *size, ossShmFlags);
@@ -216,7 +216,7 @@ sem_t* createShmSemaphore(key_t* key, size_t* size, int* shmid) {
 }
 
 int* createShmMsg(key_t* key, size_t* size, int* shmid) {
-    int ossShmFlags = IPC_CREAT | IPC_EXCL | 0777;
+    int ossShmFlags = IPC_CREAT /* | IPC_EXCL  */| 0777;
 
     //Allocate shared memory and get id.
     *shmid = shmget(*key, *size, ossShmFlags);
@@ -237,7 +237,7 @@ int* createShmMsg(key_t* key, size_t* size, int* shmid) {
 }
 
 int* createShmLogicalClock(key_t* key, size_t* size, int* shmid) {
-    int ossShmFlags = IPC_CREAT | IPC_EXCL | 0777;
+    int ossShmFlags = IPC_CREAT /* | IPC_EXCL  */| 0777;
 
     //Allocate shared memory and get id.
     *shmid = shmget(*key, *size, ossShmFlags);

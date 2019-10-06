@@ -10,7 +10,7 @@
 
 #include "sharedMemoryKeys.h"
 
-const int DEBUG = 0;
+const int DEBUG = 1;
 
 //--------------Function prototypes-----------------------
 
@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
 
     //Shared memory sizes
     size_t shmSemSize = sizeof(sem_t);
-    size_t shmMsgSize = 0;
+    size_t shmMsgSize = 2 * sizeof(int);
     size_t shmClockSize = 2 * sizeof(int);
 
     //Shared memory control structs.
@@ -53,15 +53,10 @@ int main(int argc, char* argv[]) {
 
     //--------------------------------
     
-    //Set size of shmMsg array.
-    shmMsgSize = (unsigned long) atoi(argv[1]);
-
     if(DEBUG) {
         fprintf(stderr, "Child:%d, says hello to parent:%d\n", getpid(), getppid());
         fprintf(stderr, "shmMsgSize: %ld\n", shmMsgSize);
     }
-
-    sleep(1);
 
     //Setup shared memory
     semPtr = getSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
@@ -71,13 +66,13 @@ int main(int argc, char* argv[]) {
     //Test print.
     sem_wait(semPtr); //lock
     fprintf(stderr, "MSGArray: ");
-    for(i = 0; i < shmMsgSize; ++i) {
+    for(i = 0; i < shmMsgSize / sizeof(int); ++i) {
         fprintf(stderr, "%d", *shmMsgPtr++);
     }
     fprintf(stderr, "\n");
     sem_post(semPtr); //unlock
 
-    return 50;
+    return 100;
 }
 
 int* getShmMsg(key_t* key, size_t* size, int* shmid) {
