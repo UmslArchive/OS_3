@@ -20,7 +20,7 @@ enum FLAGS {
     TOTAL_FLAGS
 };
 
-const int DEBUG = 1;
+const int DEBUG = 0;
 
 //======================================================
 
@@ -92,11 +92,10 @@ int main(int argc, char* argv[]) {
     char shmMsgSizeStr[30];
     sprintf(shmMsgSizeStr, "%d", (int)shmMsgSize);
 
-    //Create process shared semaphore in shared memory.
+    //Setup shared memory w/ semaphore
     semPtr = createShmSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
-
-    //Create shared memory MSG
     shmMsgPtr = createShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
+    shmClockPtr = createShmLogicalClock(&shmClockKey, &shmClockSize, &shmClockID);
 
     //Spawn a fan of maxChildren # of processes
     for(i = 1; i < maxChildren; i++) {
@@ -127,9 +126,10 @@ int main(int argc, char* argv[]) {
         if(DEBUG) fprintf(stderr, "%d: exit status: %d\n", i, WEXITSTATUS(status));
     }
 
-    //Remove shared memory segment upon total detachment.
+    //Remove shared memory segments upon total detachment.
     if(pid > 0) {
         cleanupSharedMemory(&shmMsgID, &shmMsgCtl);
+        cleanupSharedMemory(&shmClockID, &shmClockCtl);
         cleanupSharedMemory(&shmSemID, &shmSemCtl);
     }
 
@@ -226,6 +226,7 @@ int* createShmMsg(key_t* key, size_t* size, int* shmid) {
         exit(1);
     }
 
+    //Set the pointer
     int* temp = (int*)shmat(*shmid, NULL, 0);
     if(temp == (int*) -1) {
         perror("ERROR:oss:shmat failed(msg)");
@@ -236,7 +237,24 @@ int* createShmMsg(key_t* key, size_t* size, int* shmid) {
 }
 
 int* createShmLogicalClock(key_t* key, size_t* size, int* shmid) {
+    int ossShmFlags = IPC_CREAT | IPC_EXCL | 0777;
 
+    //Allocate shared memory and get id.
+    *shmid = shmget(*key, *size, ossShmFlags);
+    if(*shmid < 0) {
+        perror("ERROR:oss:shmget failed(clock)");
+        fprintf(stderr, "key:%d, size:%ld, flags:%d\n", *key, *size, ossShmFlags);
+        exit(1);
+    }
+
+    //Set the pointer
+    int* temp = (int*)shmat(*shmid, NULL, 0);
+    if(temp == (int*) -1) {
+        perror("ERROR:oss:shmat failed(clock)");
+        exit(1);
+    }
+
+    return temp;
 }
 
 void cleanupSharedMemory(int* shmid, struct shmid_ds* ctl) {

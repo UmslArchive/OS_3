@@ -10,13 +10,13 @@
 
 #include "sharedMemoryKeys.h"
 
-const int DEBUG = 1;
+const int DEBUG = 0;
 
 //--------------Function prototypes-----------------------
 
 sem_t* getSemaphore(key_t* key, size_t* size, int* shmid);
 int* getShmMsg(key_t* key, size_t* size, int* shmid);
-int* getShmLogicalClock();
+int* getShmLogicalClock(key_t* key, size_t* size, int* shmid);
 
 //--------------------------------------------------------
 
@@ -63,20 +63,19 @@ int main(int argc, char* argv[]) {
 
     sleep(1);
 
-    //Point the pointer to the semaphore.
+    //Setup shared memory
     semPtr = getSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
-
-    //Point the pointer to the shared memory.
     shmMsgPtr = getShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
+    shmClockPtr = getShmLogicalClock(&shmClockKey, &shmClockSize, &shmClockID);
 
-    sem_wait(semPtr);
     //Test print.
+    sem_wait(semPtr); //lock
     fprintf(stderr, "MSGArray: ");
     for(i = 0; i < shmMsgSize; ++i) {
-        fprintf(stderr, "%d ", *shmMsgPtr++);
+        fprintf(stderr, "%d", *shmMsgPtr++);
     }
     fprintf(stderr, "\n");
-    sem_post(semPtr);
+    sem_post(semPtr); //unlock
 
     return 50;
 }
@@ -85,14 +84,32 @@ int* getShmMsg(key_t* key, size_t* size, int* shmid) {
     //Fetch the shmid.
     *shmid = shmget(*key, *size, 0777);
     if(*shmid < 0) {
-        perror("ERROR:usrPs:shmget failed");
+        perror("ERROR:usrPs:shmget failed(msg)");
         exit(1);
     }
 
     //Attach to segment
     int* temp = (int*)shmat(*shmid, 0, 0);
     if(temp == (int*) -1) {
-        perror("ERROR:usrPs:shmat failed");
+        perror("ERROR:usrPs:shmat failed(msg)");
+        exit(1);
+    }
+
+    return temp;
+}
+
+int* getShmLogicalClock(key_t* key, size_t* size, int* shmid){
+    //Fetch the shmid.
+    *shmid = shmget(*key, *size, 0777);
+    if(*shmid < 0) {
+        perror("ERROR:usrPs:shmget failed(clock)");
+        exit(1);
+    }
+
+    //Attach to segment
+    int* temp = (int*)shmat(*shmid, 0, 0);
+    if(temp == (int*) -1) {
+        perror("ERROR:usrPs:shmat failed(clock)");
         exit(1);
     }
 
