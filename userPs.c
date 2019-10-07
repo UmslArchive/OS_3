@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
 
     //Critical section.
     while(1) {
-        sleep(1);
+        //sleep(1);
 
         sem_wait(semPtr); //lock
 
@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
             isMessage = 1;
         }
 
-        fprintf(stderr, "USRisMessage: %d\n", isMessage);
+        //fprintf(stderr, "USRisMessage: %d\n", isMessage);
 
         //Exit, post, and release if time has come
         if(clockSec > deathSec || (clockSec >= deathSec && clockNano >= deathNanosec)) {

@@ -37,6 +37,8 @@ void cleanupSharedMemory(int* shmid, struct shmid_ds* ctl);
 int main(int argc, char* argv[]) {
     //Iterator
     int i;
+    int totalProcesses = 0;
+    int totalProcessesWaitedOn = 0;
     
     //Command line argument values
     int maxChildren = 5;
@@ -76,6 +78,7 @@ int main(int argc, char* argv[]) {
 
     //Getopts stuff.
     handleArgs(argc, argv, &maxChildren, &logFileName, &terminateTime);
+    totalProcesses = maxChildren - 1;
 
     if(DEBUG) {
         fprintf(stderr, "maxChildren = %d\n", maxChildren);
@@ -117,7 +120,7 @@ int main(int argc, char* argv[]) {
     //Wait for each child to exit
     int exitedPID;
     while(1) {
-        sleep(1);
+        //sleep(1);
 
         sem_wait(semPtr); //lock
 
@@ -134,27 +137,42 @@ int main(int argc, char* argv[]) {
         //Check MSG status.
         int isMessage = 0;
         int* tempMsgPtr = shmMsgPtr;
-        fprintf(stderr, "OSS: msgNano = %d, msgSec = %d\n",*tempMsgPtr,*(tempMsgPtr + 1) );
+        //fprintf(stderr, "OSS: msgNano = %d, msgSec = %d\n",*tempMsgPtr,*(tempMsgPtr + 1) );
         if(*tempMsgPtr != 0 || *(tempMsgPtr + 1) != 0) {
             fprintf(stderr, "OSS found a message\n");
             isMessage = 1;
         }
 
-        fprintf(stderr, "OSSisMessage: %d\n", isMessage);
-
+        //fprintf(stderr, "OSSisMessage: %d\n", isMessage);
         if(isMessage) {
             exitedPID = wait(&status);
+            totalProcessesWaitedOn++;
+
             //Reset msg
             *tempMsgPtr = 0;
             *(tempMsgPtr + 1) = 0;
 
             if(DEBUG) fprintf(stderr, "Child %d -- exit status: %d\n", exitedPID, WEXITSTATUS(status));
+            
+            //Spawn replacement processes
+            int newProcessID;
+            if(totalProcesses < 100) {
+                totalProcesses++;
+                newProcessID = fork();
+                if(newProcessID == 0) {
+                    execl("./usrPs", "usrPs", (char*) NULL);       
+                }
+            }
+        }
+
+        //Break the loop when all processes have been waited on.
+        if(!isMessage && totalProcesses >= 100 && totalProcessesWaitedOn == totalProcesses) {
+            sem_post(semPtr);
+            break;
         }
 
         sem_post(semPtr); //unlock
     }
-    
-    
 
     //Remove shared memory segments upon total detachment.
     if(pid > 0) {
