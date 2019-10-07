@@ -8,6 +8,7 @@
 #include <sys/ipc.h>
 #include <errno.h>
 #include <semaphore.h>
+#include <signal.h>
 
 #include "sharedMemoryKeys.h"
 
@@ -20,7 +21,11 @@ enum FLAGS {
     TOTAL_FLAGS
 };
 
-const int DEBUG = 1;
+const int DEBUG = 0;
+
+//==========SIGNAL HANDLER==============================
+
+void interruptSignalHandler(int sig);
 
 //======================================================
 
@@ -74,11 +79,18 @@ int main(int argc, char* argv[]) {
     int* shmMsgPtr = NULL;
     int* shmClockPtr = NULL;
 
+    //File handler
+    FILE* logFileHandler = NULL;
+
     //-----------------------------------------------
 
     //Getopts stuff.
     handleArgs(argc, argv, &maxChildren, &logFileName, &terminateTime);
     totalProcesses = maxChildren - 1;
+
+    //Truncate log file
+    logFileHandler = fopen(logFileName, "w+");
+    fclose(logFileHandler);
 
     if(DEBUG) {
         fprintf(stderr, "maxChildren = %d\n", maxChildren);
@@ -94,6 +106,8 @@ int main(int argc, char* argv[]) {
     semPtr = createShmSemaphore(&shmSemKey, &shmSemSize, &shmSemID);
     shmMsgPtr = createShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
     shmClockPtr = createShmLogicalClock(&shmClockKey, &shmClockSize, &shmClockID);
+
+    signal(SIGINT, interruptSignalHandler);
 
     //Spawn a fan of maxChildren # of processes
     for(i = 1; i < maxChildren; i++) {
@@ -114,7 +128,7 @@ int main(int argc, char* argv[]) {
         
         if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
     }
-
+    
     sleep(1);
    
     //Wait for each child to exit
@@ -146,6 +160,14 @@ int main(int argc, char* argv[]) {
         //fprintf(stderr, "OSSisMessage: %d\n", isMessage);
         if(isMessage) {
             exitedPID = wait(&status);
+
+            //Write to log.
+            logFileHandler = fopen(logFileName, "a");
+            fprintf(logFileHandler,
+                "Master: Child %d is terminating at my time %ds %dns because it reached %ds %dns in child process\n",
+                exitedPID, *(shmClockPtr + 1), *shmClockPtr, *(shmMsgPtr + 1), *shmMsgPtr);
+            fclose(logFileHandler);
+
             totalProcessesWaitedOn++;
 
             //Reset msg
@@ -226,6 +248,11 @@ void handleArgs(int argc, char* argv[], int* maxChild, char** logFile, int* term
                 break;
         }
     }
+
+    if(flagArray[HELP_FLAG]) {
+        printf("-- OSS HELP --\n\t-s x [Set max child processes that can run simultaneously]\n\t-l x [Set log file name]\n\t-t x [Sex max runtime(seconds)]\n\n");
+        exit(15);
+    }
 }
 
 void printIntArray(int* arr, int size) {
@@ -237,7 +264,7 @@ void printIntArray(int* arr, int size) {
 }
 
 sem_t* createShmSemaphore(key_t* key, size_t* size, int* shmid) {
-    int ossShmFlags = IPC_CREAT /* | IPC_EXCL  */| 0777;
+    int ossShmFlags = IPC_CREAT  | IPC_EXCL  | 0777;
 
     //Allocate shared memory and get id
     *shmid = shmget(*key, *size, ossShmFlags);
@@ -264,7 +291,7 @@ sem_t* createShmSemaphore(key_t* key, size_t* size, int* shmid) {
 }
 
 int* createShmMsg(key_t* key, size_t* size, int* shmid) {
-    int ossShmFlags = IPC_CREAT /* | IPC_EXCL  */| 0777;
+    int ossShmFlags = IPC_CREAT  | IPC_EXCL  | 0777;
 
     //Allocate shared memory and get id.
     *shmid = shmget(*key, *size, ossShmFlags);
@@ -285,7 +312,7 @@ int* createShmMsg(key_t* key, size_t* size, int* shmid) {
 }
 
 int* createShmLogicalClock(key_t* key, size_t* size, int* shmid) {
-    int ossShmFlags = IPC_CREAT /* | IPC_EXCL  */| 0777;
+    int ossShmFlags = IPC_CREAT  | IPC_EXCL  | 0777;
 
     //Allocate shared memory and get id.
     *shmid = shmget(*key, *size, ossShmFlags);
@@ -312,4 +339,10 @@ void cleanupSharedMemory(int* shmid, struct shmid_ds* ctl) {
             perror("ERROR:oss:shmctl failed");
             exit(1);
         }
+}
+
+void interruptSignalHandler(int sig) 
+{
+    printf("Caught ctrl-c signal\n");
+    exit(22);
 }

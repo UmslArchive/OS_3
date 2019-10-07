@@ -84,15 +84,12 @@ int main(int argc, char* argv[]) {
     //Critical section.
     while(1) {
         //sleep(1);
-
         sem_wait(semPtr); //lock
 
         //Read the clock.
         int* tempClockPtr = shmClockPtr;
         int clockNano = *tempClockPtr;
         int clockSec = *(tempClockPtr + 1);
-
-        
 
         //Check MSG status.
         int isMessage = 0;
@@ -106,7 +103,6 @@ int main(int argc, char* argv[]) {
         //Exit, post, and release if time has come
         if(clockSec > deathSec || (clockSec >= deathSec && clockNano >= deathNanosec)) {
             if(isMessage == 0) {
-                // /fprintf(stderr, "exit post n release\n");
                 //Post the message
                 *shmMsgPtr = deathNanosec;
                 *(shmMsgPtr + 1) = deathSec;
