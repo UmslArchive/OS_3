@@ -35,6 +35,10 @@ struct shmid_ds shmClockCtl;
 
 int terminateTime = 5;
 
+//dynamic array to hold all child process IDs
+int* pidArray;
+int pidArraySize = 0;
+
 //==========SIGNAL HANDLERS==============================
 
 void interruptSignalHandler(int sig);
@@ -116,6 +120,13 @@ int main(int argc, char* argv[]) {
     //Spawn a fan of maxChildren # of processes
     for(i = 1; i < maxChildren; i++) {
         pid = fork();
+        
+        //Store the child pids in the array
+        if(pid > 0) {
+            pidArraySize++;
+            pidArray = realloc(pidArray, pidArraySize);
+            pidArray[pidArraySize - 1] = pid;
+        }
 
         //Fork error
         if(pid < 0) {
@@ -133,6 +144,7 @@ int main(int argc, char* argv[]) {
         if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
     }
     
+    //Set the alarm
     alarm(terminateTime);
    
     //Wait for each child to exit
@@ -146,7 +158,7 @@ int main(int argc, char* argv[]) {
 
         //Increment the clock
         int* tempClockPtr = shmClockPtr;
-        *tempClockPtr += 5;                         //<--tick rate
+        *tempClockPtr += 1;                         //<--tick rate
         if(*tempClockPtr >= 1000000000) {
             *(tempClockPtr + 1) += 1;
             *tempClockPtr = 0;
@@ -164,6 +176,16 @@ int main(int argc, char* argv[]) {
         //fprintf(stderr, "OSSisMessage: %d\n", isMessage);
         if(isMessage) {
             exitedPID = wait(&status);
+            
+            //Find the process id in the index and save the index.
+            int deadProcessIndex = -1;
+            for(i = 0; i < pidArraySize; ++i) {
+                if(exitedPID == pidArray[i]) {
+                    deadProcessIndex = i;
+                    pidArray[i] = 0;
+                    break;
+                }
+            }
 
             //Write to log.
             logFileHandler = fopen(logFileName, "a");
@@ -188,6 +210,9 @@ int main(int argc, char* argv[]) {
                 if(newProcessID == 0) {
                     execl("./usrPs", "usrPs", (char*) NULL);       
                 }
+
+                //Replace the dead processid with the new pid in the array
+                pidArray[deadProcessIndex] = newProcessID;
             }
         }
 
@@ -354,9 +379,18 @@ void interruptSignalHandler(int sig) {
 }
 
 void alarmSignalHandler(int sig) {
+    int i;
     shmctl(shmMsgID, IPC_RMID, &shmMsgCtl);
     shmctl(shmClockID, IPC_RMID, &shmClockCtl);
     shmctl(shmSemID, IPC_RMID, &shmSemCtl);
     printf("OSS timed out after %d seconds,\n", terminateTime);
+    
+    //Send kill signal to every process thats alive
+    for(i = 0; i < pidArraySize; ++i) {
+        if(pidArray[i] != 0) {
+            kill(pidArray[i], SIGQUIT);
+        }
+    }
+
     exit(0);
 }

@@ -8,10 +8,16 @@
 #include <sys/ipc.h>
 #include <time.h>
 #include <semaphore.h>
+#include <signal.h>
 
 #include "sharedMemoryKeys.h"
 
 const int DEBUG = 0;
+
+//Shared memory IDs
+int shmSemID = 0;
+int shmMsgID = 0;
+int shmClockID = 0;
 
 //--------------Function prototypes-----------------------
 
@@ -21,12 +27,18 @@ int* getShmLogicalClock(key_t* key, size_t* size, int* shmid);
 void setDeathTime(int* nanosec, int* sec, int* clockPtr);
 void criticalSection(int* nanosec, int* sec, int* clockPtr, int* msgPtr, sem_t* sem);
 
+//Signal handler
+void handleQuitSignal(int sig);
+
 //--------------------------------------------------------
 
 
 int main(int argc, char* argv[]) {
     //Seed the rand
     srand(time(NULL));
+
+    //Register signal handler
+    signal(SIGQUIT, handleQuitSignal);
 
     //Iterator
     int i;
@@ -35,11 +47,6 @@ int main(int argc, char* argv[]) {
     key_t shmSemKey = SEM_KEY;
     key_t shmMsgKey = MSG_KEY;
     key_t shmClockKey = CLOCK_KEY;
-
-    //Shared memory IDs
-    int shmSemID = 0;
-    int shmMsgID = 0;
-    int shmClockID = 0;
 
     //Shared memory sizes
     size_t shmSemSize = sizeof(sem_t);
@@ -117,6 +124,11 @@ int main(int argc, char* argv[]) {
         sem_post(semPtr); //unlock
     }
 
+    //Ensure detachment
+    shmdt(&shmMsgID);
+    shmdt(&shmClockID);
+    shmdt(&shmSemID);
+
     return 100;
 }
 
@@ -189,4 +201,12 @@ void setDeathTime(int* nanosec, int* sec, int* clockPtr) {
         *nanosec = 0;
         *sec += 1;
     }
+}
+
+void handleQuitSignal(int sig) {
+    shmdt(&shmMsgID);
+    shmdt(&shmClockID);
+    shmdt(&shmSemID);
+
+    exit(33);
 }
