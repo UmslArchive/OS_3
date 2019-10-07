@@ -232,6 +232,8 @@ int main(int argc, char* argv[]) {
         cleanupSharedMemory(&shmSemID, &shmSemCtl);
     }
 
+    free(pidArray);
+
     return 0;
 }
 
@@ -371,18 +373,26 @@ void cleanupSharedMemory(int* shmid, struct shmid_ds* ctl) {
 }
 
 void interruptSignalHandler(int sig) {
+    //Cleanup the memory
     shmctl(shmMsgID, IPC_RMID, &shmMsgCtl);
     shmctl(shmClockID, IPC_RMID, &shmClockCtl);
     shmctl(shmSemID, IPC_RMID, &shmSemCtl);
+    
     printf("Caught ctrl-c signal\n");
+
+    free(pidArray);
+    
     exit(0);
 }
 
 void alarmSignalHandler(int sig) {
     int i;
+
+    //Cleanup the memory
     shmctl(shmMsgID, IPC_RMID, &shmMsgCtl);
     shmctl(shmClockID, IPC_RMID, &shmClockCtl);
     shmctl(shmSemID, IPC_RMID, &shmSemCtl);
+    
     printf("OSS timed out after %d seconds,\n", terminateTime);
     
     //Send kill signal to every process thats alive
@@ -391,6 +401,8 @@ void alarmSignalHandler(int sig) {
             kill(pidArray[i], SIGQUIT);
         }
     }
+
+    free(pidArray);
 
     exit(0);
 }

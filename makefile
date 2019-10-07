@@ -15,4 +15,4 @@ usrPs: userPs.o
 
 .PHONY: clean
 clean:
-	rm -f *.o oss usrPs
+	rm -f *.o oss usrPs *.txt

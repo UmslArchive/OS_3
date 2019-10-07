@@ -1,0 +1,21 @@
+Author: Colby Ackerman
+Class: CS4780 Operating Systems
+Date: 10/6/19
+
+==========================================
+
+Install :
+    `make`
+
+Run :
+    `./oss`
+    -h for help
+
+Notes :
+    The only interrupt signal that is currently handled is the SIGTERM signal.
+    (ctrl-c). Memory is cleaned up properly for that signal only. Don't hit
+    ctrl-z otherwise you will have to kill -9 ossPID, which you will have to find
+    with `ps -e | grep "oss"` then you will have to wipe the shared memory away
+    with `ipcrm -M keyVal`
+
+    ONLY USE CTRL-C TO INTERRUPT!
