@@ -23,9 +23,22 @@ enum FLAGS {
 
 const int DEBUG = 0;
 
-//==========SIGNAL HANDLER==============================
+//Shared memory IDs
+int shmSemID = 0;
+int shmMsgID = 0;
+int shmClockID = 0;
+
+//Shared memory control structs.
+struct shmid_ds shmSemCtl;
+struct shmid_ds shmMsgCtl;
+struct shmid_ds shmClockCtl;
+
+int terminateTime = 5;
+
+//==========SIGNAL HANDLERS==============================
 
 void interruptSignalHandler(int sig);
+void alarmSignalHandler(int sig);
 
 //======================================================
 
@@ -48,7 +61,6 @@ int main(int argc, char* argv[]) {
     //Command line argument values
     int maxChildren = 5;
     char* logFileName = "log.txt";
-    int terminateTime = 5;
 
     //Process variables
     int status;
@@ -59,20 +71,10 @@ int main(int argc, char* argv[]) {
     key_t shmMsgKey = MSG_KEY;
     key_t shmClockKey = CLOCK_KEY;
 
-    //Shared memory IDs
-    int shmSemID = 0;
-    int shmMsgID = 0;
-    int shmClockID = 0;
-
     //Shared memory sizes
     size_t shmSemSize = sizeof(sem_t);
     size_t shmMsgSize = 2 * sizeof(int);
     size_t shmClockSize = 2 * sizeof(int);
-
-    //Shared memory control structs.
-    struct shmid_ds shmSemCtl;
-    struct shmid_ds shmMsgCtl;
-    struct shmid_ds shmClockCtl;
 
     //Shared memory pointers
     sem_t* semPtr = NULL;
@@ -107,7 +109,9 @@ int main(int argc, char* argv[]) {
     shmMsgPtr = createShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
     shmClockPtr = createShmLogicalClock(&shmClockKey, &shmClockSize, &shmClockID);
 
+    //Register signal handlers
     signal(SIGINT, interruptSignalHandler);
+    signal(SIGALRM, alarmSignalHandler);
 
     //Spawn a fan of maxChildren # of processes
     for(i = 1; i < maxChildren; i++) {
@@ -129,7 +133,7 @@ int main(int argc, char* argv[]) {
         if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
     }
     
-    sleep(1);
+    alarm(terminateTime);
    
     //Wait for each child to exit
     int exitedPID;
@@ -142,7 +146,7 @@ int main(int argc, char* argv[]) {
 
         //Increment the clock
         int* tempClockPtr = shmClockPtr;
-        *tempClockPtr += 1;                         //<--tick rate
+        *tempClockPtr += 5;                         //<--tick rate
         if(*tempClockPtr >= 1000000000) {
             *(tempClockPtr + 1) += 1;
             *tempClockPtr = 0;
@@ -341,8 +345,18 @@ void cleanupSharedMemory(int* shmid, struct shmid_ds* ctl) {
         }
 }
 
-void interruptSignalHandler(int sig) 
-{
+void interruptSignalHandler(int sig) {
+    shmctl(shmMsgID, IPC_RMID, &shmMsgCtl);
+    shmctl(shmClockID, IPC_RMID, &shmClockCtl);
+    shmctl(shmSemID, IPC_RMID, &shmSemCtl);
     printf("Caught ctrl-c signal\n");
-    exit(22);
+    exit(0);
+}
+
+void alarmSignalHandler(int sig) {
+    shmctl(shmMsgID, IPC_RMID, &shmMsgCtl);
+    shmctl(shmClockID, IPC_RMID, &shmClockCtl);
+    shmctl(shmSemID, IPC_RMID, &shmSemCtl);
+    printf("OSS timed out after %d seconds,\n", terminateTime);
+    exit(0);
 }
