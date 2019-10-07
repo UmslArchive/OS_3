@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <sys/shm.h>
 #include <sys/ipc.h>
+#include <time.h>
 #include <semaphore.h>
 
 #include "sharedMemoryKeys.h"
@@ -24,6 +25,9 @@ void criticalSection(int* nanosec, int* sec, int* clockPtr, int* msgPtr, sem_t* 
 
 
 int main(int argc, char* argv[]) {
+    //Seed the rand
+    srand(time(NULL));
+
     //Iterator
     int i;
 
@@ -107,7 +111,7 @@ int main(int argc, char* argv[]) {
                 *shmMsgPtr = deathNanosec;
                 *(shmMsgPtr + 1) = deathSec;
 
-                fprintf(stderr, "nano=%d, sec=%d\n", clockNano, clockSec);
+                fprintf(stderr, "DEATH: %dns, %ds\n\n", clockNano, clockSec);
 
                 sem_post(semPtr);
                 exit(50);
@@ -182,7 +186,7 @@ void setDeathTime(int* nanosec, int* sec, int* clockPtr) {
     *sec = *(temp + 1);
 
     //Randomly generate duration.
-    *nanosec += 1000;
+    *nanosec += rand() % 1000000 + 1;
 
     //Rollover
     if(*nanosec >= 1000000000) {

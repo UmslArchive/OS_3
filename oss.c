@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
 
         //Increment the clock
         int* tempClockPtr = shmClockPtr;
-        *tempClockPtr += 100000000;
+        *tempClockPtr += 1;                         //<--tick rate
         if(*tempClockPtr >= 1000000000) {
             *(tempClockPtr + 1) += 1;
             *tempClockPtr = 0;
@@ -152,7 +152,7 @@ int main(int argc, char* argv[]) {
             *tempMsgPtr = 0;
             *(tempMsgPtr + 1) = 0;
 
-            if(DEBUG) fprintf(stderr, "Child %d -- exit status: %d\n", exitedPID, WEXITSTATUS(status));
+            if(DEBUG) fprintf(stderr, "Child %d -- exit status: %d\n\n", exitedPID, WEXITSTATUS(status));
             
             //Spawn replacement processes
             int newProcessID;
