@@ -109,22 +109,52 @@ int main(int argc, char* argv[]) {
             exit(55);
         } 
         
-        //Process parent only
-        if(pid > 0) {
-            if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
-        }
+        if(DEBUG) fprintf(stderr, "onPass:%d, Parent created child process: %d\n", i, pid);
     }
 
-
+    sleep(1);
    
     //Wait for each child to exit
     int exitedPID;
-    for(i = 1; i < maxChildren; i++) {
-        exitedPID = wait(&status);
-        sem_wait(semPtr);
-        if(DEBUG) fprintf(stderr, "Child %d -- exit status: %d\n", exitedPID, WEXITSTATUS(status));
-        sem_post(semPtr);
+    while(1) {
+        sleep(1);
+
+        sem_wait(semPtr); //lock
+
+        //fprintf(stderr, "Start OSS\n");
+
+        //Increment the clock
+        int* tempClockPtr = shmClockPtr;
+        *tempClockPtr += 100000000;
+        if(*tempClockPtr >= 1000000000) {
+            *(tempClockPtr + 1) += 1;
+            *tempClockPtr = 0;
+        }
+
+        //Check MSG status.
+        int isMessage = 0;
+        int* tempMsgPtr = shmMsgPtr;
+        fprintf(stderr, "OSS: msgNano = %d, msgSec = %d\n",*tempMsgPtr,*(tempMsgPtr + 1) );
+        if(*tempMsgPtr != 0 || *(tempMsgPtr + 1) != 0) {
+            fprintf(stderr, "OSS found a message\n");
+            isMessage = 1;
+        }
+
+        fprintf(stderr, "OSSisMessage: %d\n", isMessage);
+
+        if(isMessage) {
+            exitedPID = wait(&status);
+            //Reset msg
+            *tempMsgPtr = 0;
+            *(tempMsgPtr + 1) = 0;
+
+            if(DEBUG) fprintf(stderr, "Child %d -- exit status: %d\n", exitedPID, WEXITSTATUS(status));
+        }
+
+        sem_post(semPtr); //unlock
     }
+    
+    
 
     //Remove shared memory segments upon total detachment.
     if(pid > 0) {

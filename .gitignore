@@ -1,3 +1,4 @@
 *.o
 oss
 usrPs
+memoryReset.sh

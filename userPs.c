@@ -10,13 +10,15 @@
 
 #include "sharedMemoryKeys.h"
 
-const int DEBUG = 1;
+const int DEBUG = 0;
 
 //--------------Function prototypes-----------------------
 
 sem_t* getSemaphore(key_t* key, size_t* size, int* shmid);
 int* getShmMsg(key_t* key, size_t* size, int* shmid);
 int* getShmLogicalClock(key_t* key, size_t* size, int* shmid);
+void setDeathTime(int* nanosec, int* sec, int* clockPtr);
+void criticalSection(int* nanosec, int* sec, int* clockPtr, int* msgPtr, sem_t* sem);
 
 //--------------------------------------------------------
 
@@ -51,6 +53,11 @@ int main(int argc, char* argv[]) {
     int* shmMsgPtr = NULL;
     int* shmClockPtr = NULL;
 
+    //Life vars
+    int deathNanosec = 0;
+    int deathSec = 0;
+    int isInitialized = 0;
+
     //--------------------------------
     
     if(DEBUG) {
@@ -63,14 +70,52 @@ int main(int argc, char* argv[]) {
     shmMsgPtr = getShmMsg(&shmMsgKey, &shmMsgSize, &shmMsgID);
     shmClockPtr = getShmLogicalClock(&shmClockKey, &shmClockSize, &shmClockID);
 
-    //Test print.
-    sem_wait(semPtr); //lock
-    fprintf(stderr, "MSGArray: ");
-    for(i = 0; i < shmMsgSize / sizeof(int); ++i) {
-        fprintf(stderr, "%d", *shmMsgPtr++);
+    //Set lifetime of process.
+    sem_wait(semPtr);
+        setDeathTime(&deathNanosec, &deathSec, shmClockPtr);
+    sem_post(semPtr);
+
+    fprintf(stderr, "DeathTime: %dns %ds\n", deathNanosec, deathSec);
+
+    //Critical section.
+    while(1) {
+        sleep(1);
+
+        sem_wait(semPtr); //lock
+
+        //Read the clock.
+        int* tempClockPtr = shmClockPtr;
+        int clockNano = *tempClockPtr;
+        int clockSec = *(tempClockPtr + 1);
+
+        
+
+        //Check MSG status.
+        int isMessage = 0;
+        int* tempMsgPtr = shmMsgPtr;
+        if(*tempMsgPtr != 0 || *(tempMsgPtr + 1) != 0) {
+            isMessage = 1;
+        }
+
+        fprintf(stderr, "USRisMessage: %d\n", isMessage);
+
+        //Exit, post, and release if time has come
+        if(clockSec > deathSec || (clockSec >= deathSec && clockNano >= deathNanosec)) {
+            if(isMessage == 0) {
+                // /fprintf(stderr, "exit post n release\n");
+                //Post the message
+                *shmMsgPtr = deathNanosec;
+                *(shmMsgPtr + 1) = deathSec;
+
+                fprintf(stderr, "nano=%d, sec=%d\n", clockNano, clockSec);
+
+                sem_post(semPtr);
+                exit(50);
+            }
+        }
+
+        sem_post(semPtr); //unlock
     }
-    fprintf(stderr, "\n");
-    sem_post(semPtr); //unlock
 
     return 100;
 }
@@ -127,4 +172,21 @@ sem_t* getSemaphore(key_t* key, size_t* size, int* shmid) {
     }
 
     return temp;
+}
+
+void setDeathTime(int* nanosec, int* sec, int* clockPtr) {
+    int* temp = clockPtr;
+
+    //Read shared memory clock.
+    *nanosec = *temp;
+    *sec = *(temp + 1);
+
+    //Randomly generate duration.
+    *nanosec += 1000;
+
+    //Rollover
+    if(*nanosec >= 1000000000) {
+        *nanosec = 0;
+        *sec += 1;
+    }
 }
